@@ -3,15 +3,18 @@ from collections import deque
 from os import sys
 import heapq
 import copy
+import time
+from rich.console import Console
 
-
+console = Console()
 
 #Non blocking keyboard input gets stored in the deque
 keypresses = deque()
 listener = keyboard.Listener(on_press=keypresses.append)
 listener.start()
 
-
+board_width = 4
+board_height = 4
 
 #Initialize the puzzle from a given file
 
@@ -20,19 +23,20 @@ class Puzzle:
         with open(initial) as f:
             try:
                 self.board = [list(map(int, line.split())) for line in f]
-                self.empty_slot = [(i,j) for i in range(4) for j in range(4) if self.board[i][j] == 0][0]
+                self.empty_slot = [(i,j) for i in range(board_width) for j in range(board_height) if self.board[i][j] == 0][0]
             except:
                 print("Invalid puzzle file format for initial state. Please refer to the documentation for more information.")
                 sys.exit(1)
         with open(goal) as f:
             try:
                 self.goal_board = [list(map(int, line.split())) for line in f]
-                self.goal_empty_slot = [(i,j) for i in range(4) for j in range(4) if self.goal_board[i][j] == 0][0]
+                self.goal_empty_slot = [(i,j) for i in range(board_width) for j in range(board_height) if self.goal_board[i][j] == 0][0]
             except:
                 print("Invalid puzzle file format for goal state. Please refer to the documentation for more information.")
                 sys.exit(1)
         #TODO: Check if the initial state is solvable
         self.keypresses = keypresses
+        self.watch = False
         self.print()
         
     def check_if_goal(self):
@@ -47,7 +51,10 @@ class Puzzle:
         print()
         for i in board:
             for j in i:
-                print("{0:2d}".format(j), end=' ')
+                if j == 0:
+                    console.print('[bold red] 0[/bold red]', end=' ')
+                else:
+                    print("{0:2d}".format(j), end=' ')
             print()
         print()
             
@@ -65,6 +72,8 @@ class Puzzle:
     
     def play(self):
         while(1):
+            if self.watch:
+                time.sleep(1)
             if len(self.keypresses) != 0:
                 keypress = self.keypresses.popleft()
                 deltas = [0, 0]
@@ -87,7 +96,22 @@ class Puzzle:
                     deltas = [0, 1]
                 elif keypress == keyboard.KeyCode.from_char('s'):
                     print("Solving...")
-                    self.solve()
+                    self.watch = True
+                    solution = self.solve()
+                    translated_moves = []
+                    for move in solution:
+                        if move == (0, -1):
+                            translated_moves.append("left")
+                            keypresses.append(keyboard.Key.left)
+                        elif move == (0, 1):
+                            translated_moves.append("right")
+                            keypresses.append(keyboard.Key.right)
+                        elif move == (-1, 0):
+                            translated_moves.append("up")
+                            keypresses.append(keyboard.Key.up)
+                        elif move == (1, 0):
+                            translated_moves.append("down")
+                            keypresses.append(keyboard.Key.down)
                     continue
                 else:
                     continue
@@ -103,33 +127,59 @@ class Puzzle:
     def solve(self):
         base_board = copy.deepcopy(self.board)
         frontier = []
+        seen = set()
         
-        #TODO: Calculate chessboard distance
-        def heuristic(board, goal_board):
+        #As per the assignment, heuristic is the chessboard distance
+        def heuristic(board):
             #Chessboard distance
             cbd = 0
-            for i in board:
-                for j in i:
-                    pass
+            cur_locations = {}  #Map of current locations of each number
+            goal_locations = {} #Map of goal locations of each number
+            for i in range(board_width):
+                for j in range(board_height):
+                    number = board[i][j]
+                    cur_locations[number] = (i, j)
+                    number = self.goal_board[i][j]
+                    goal_locations[number] = (i, j)
+            
+            for i in range(board_width*board_height):
+                cbd += max(abs(cur_locations[i][0] - goal_locations[i][0]), abs(cur_locations[i][1] - goal_locations[i][1])) #Chessboard distance is defined as the maximum of the x and y distances between the two points
             return cbd
-        print(heuristic(self.board, self.goal_board))
         
-        #TODO: Make sure we don't generate duplicates
+        #Generate moves and add them to the frontier
         def gen_moves(board, empty_slot, cost = 0, parent_seq = []):
-            possible_deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]]
+            possible_deltas = [(-1, 0), (1, 0), (0, -1), (0, 1)]
             for i in range(4):
                 this_board = copy.deepcopy(board)
                 deltas = possible_deltas[i]
                 output, out_empty = self._gen_output(this_board, empty_slot, deltas)
+                
+                #If we can't move in this direction, skip it
                 if not output:
                     continue
-                f = heuristic(output, self.goal_board) + cost + 1
-                heapq.heappush(frontier, (f, output, out_empty, parent_seq + deltas))
+                
+                #If we've already seen this board, skip it
+                hashable_output  = tuple(tuple(i) for i in output)
+                if hashable_output in seen:
+                    continue
+                seen.add(hashable_output)
+                
+                #Calculate f as g(n) + h(n) -> cost + heuristic
+                f = heuristic(output) + cost + 1
+                
+                #Add this board to the frontier
+                heapq.heappush(frontier, (f, cost + 1, output, out_empty, parent_seq + [deltas]))
+                
+        #Generate the first set of moves
         gen_moves(base_board, self.empty_slot)
-        for i in frontier:
-            print(i)
-            
-        #TODO: Implement Weighted A* search
+        
+        #Perform A* search
+        while len(frontier) != 0:
+            _, cost, result, result_empty, sequence = heapq.heappop(frontier)
+            if result == self.goal_board:
+                return sequence
+            gen_moves(result, result_empty, cost, sequence)
+        return None #No solution found
         
 
 if len(sys.argv) < 5:
