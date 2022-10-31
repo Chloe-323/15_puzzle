@@ -19,21 +19,22 @@ board_height = 4
 #Initialize the puzzle from a given file
 
 class Puzzle:
-    def __init__(self, initial, goal, keypresses):
-        with open(initial) as f:
-            try:
-                self.board = [list(map(int, line.split())) for line in f]
-                self.empty_slot = [(i,j) for i in range(board_width) for j in range(board_height) if self.board[i][j] == 0][0]
-            except:
-                print("Invalid puzzle file format for initial state. Please refer to the documentation for more information.")
-                sys.exit(1)
-        with open(goal) as f:
-            try:
-                self.goal_board = [list(map(int, line.split())) for line in f]
-                self.goal_empty_slot = [(i,j) for i in range(board_width) for j in range(board_height) if self.goal_board[i][j] == 0][0]
-            except:
-                print("Invalid puzzle file format for goal state. Please refer to the documentation for more information.")
-                sys.exit(1)
+    def __init__(self, input_file, output_file, keypresses):
+        self.board = []
+        self.goal_board = []
+        self.output_file = output_file
+        with open(input_file) as f:
+            i = 0
+            for line in f:
+                if i == 0:
+                    self.weight = float(line)
+                elif i > 1 and i < 6:
+                    self.board.append([int(x) for x in line.split()])
+                elif i > 6 and i < 11:
+                    self.goal_board.append([int(x) for x in line.split()])
+                i += 1
+        self.empty_slot = [(i,j) for i in range(board_width) for j in range(board_height) if self.board[i][j] == 0][0]
+        self.goal_empty_slot = [(i,j) for i in range(board_width) for j in range(board_height) if self.goal_board[i][j] == 0][0]
         #TODO: Check if the initial state is solvable
         self.keypresses = keypresses
         self.watch = False
@@ -98,19 +99,14 @@ class Puzzle:
                     print("Solving...")
                     self.watch = True
                     solution = self.solve()
-                    translated_moves = []
                     for move in solution:
                         if move == (0, -1):
-                            translated_moves.append("left")
                             keypresses.append(keyboard.Key.left)
                         elif move == (0, 1):
-                            translated_moves.append("right")
                             keypresses.append(keyboard.Key.right)
                         elif move == (-1, 0):
-                            translated_moves.append("up")
                             keypresses.append(keyboard.Key.up)
                         elif move == (1, 0):
-                            translated_moves.append("down")
                             keypresses.append(keyboard.Key.down)
                     continue
                 else:
@@ -128,6 +124,7 @@ class Puzzle:
         base_board = copy.deepcopy(self.board)
         frontier = []
         seen = set()
+        expanded = 1
         
         #As per the assignment, heuristic is the chessboard distance
         def heuristic(board):
@@ -147,7 +144,7 @@ class Puzzle:
             return cbd
         
         #Generate moves and add them to the frontier
-        def gen_moves(board, empty_slot, cost = 0, parent_seq = []):
+        def gen_moves(board, empty_slot, cost = 0, parent_seq = [], parent_seq_f = []):
             possible_deltas = [(-1, 0), (1, 0), (0, -1), (0, 1)]
             for i in range(4):
                 this_board = copy.deepcopy(board)
@@ -165,26 +162,69 @@ class Puzzle:
                 seen.add(hashable_output)
                 
                 #Calculate f as g(n) + h(n) -> cost + heuristic
-                f = heuristic(output) + cost + 1
+                f = (self.weight * heuristic(output)) + cost + 1
                 
                 #Add this board to the frontier
-                heapq.heappush(frontier, (f, cost + 1, output, out_empty, parent_seq + [deltas]))
+                heapq.heappush(frontier, (f, cost + 1, output, out_empty, parent_seq + [deltas], parent_seq_f + [f]))
                 
         #Generate the first set of moves
         gen_moves(base_board, self.empty_slot)
         
         #Perform A* search
+        solution = None
+        psf = None
         while len(frontier) != 0:
-            _, cost, result, result_empty, sequence = heapq.heappop(frontier)
+            expanded += 1
+            _, cost, result, result_empty, sequence, parent_seq_f = heapq.heappop(frontier)
             if result == self.goal_board:
-                return sequence
-            gen_moves(result, result_empty, cost, sequence)
-        return None #No solution found
+                solution = sequence
+                psf = parent_seq_f
+                break
+            gen_moves(result, result_empty, cost, sequence, parent_seq_f)
+        
+        if not solution:
+            print("No solution found")
+            sys.exit(1)
+        
+        if not self.output_file:
+            return solution
+        with open(self.output_file, 'w') as f:
+            for i in self.board:
+                for j in i:
+                    f.write(str(j) + " ")
+                f.write("\n")
+            f.write("\n")
+            for i in self.goal_board:
+                for j in i:
+                    f.write(str(j) + " ")
+                f.write("\n")
+            f.write("\n")
+            f.write(str(self.weight) + "\n")
+            f.write(str(len(solution)) + "\n") #depth
+            f.write(str(expanded) + "\n") #nodes expanded
+            for move in solution:
+                if move == (0, -1):
+                    f.write("L ")
+                elif move == (0, 1):
+                    f.write("R ")
+                elif move == (-1, 0):
+                    f.write("U ")
+                elif move == (1, 0):
+                    f.write("D ")
+            f.write("\n")
+            for f_value in psf:
+                f.write(str(f_value) + " ")
+        return solution
         
 
-if len(sys.argv) < 5:
-    print("Usage: python3 15_puzzle.py -i <initial_state_file> -g <goal_state_file>")
-    sys.exit(1)
+if len(sys.argv) < 2:
+    print(f"Usage: python3 {sys.argv[0]} <input_file> [-s <output_file>]")
+    exit(1)
     
-puzzle = Puzzle(sys.argv[2], sys.argv[4], keypresses)
+out_file = None
+if '-s' in sys.argv:
+    keypresses.append(keyboard.KeyCode.from_char('s'))
+    out_file = sys.argv[-1]
+    
+puzzle = Puzzle(sys.argv[1], out_file, keypresses)
 puzzle.play()
