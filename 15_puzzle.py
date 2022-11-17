@@ -49,7 +49,7 @@ class Puzzle:
                 
         #Find the empty slots
         self.empty_slot = [(i,j) for i in range(board_width) for j in range(board_height) if self.board[i][j] == 0][0]
-        self.goal_empty_slot = [(i,j) for i in range(board_width) for j in range(board_height) if self.goal_board[i][j] == 0][0]
+#        self.goal_empty_slot = [(i,j) for i in range(board_width) for j in range(board_height) if self.goal_board[i][j] == 0][0]
         #TODO: Check if the initial state is solvable
 
         self.print()
