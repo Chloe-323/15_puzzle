@@ -4,6 +4,7 @@ The 15 Puzzle Project for CS-UY 4613
 # Puzzle Overview
 
 The 15-puzzle is defined by a 4x4 grid of numbers, ranging from 1-15, and one empty slot, represented by a 0:
+
 ![15 puzzle](https://d1s2pua8v98dyj.cloudfront.net/mk/images/p312500b_2x.jpg)
 
 ```
