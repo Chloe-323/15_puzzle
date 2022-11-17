@@ -152,9 +152,11 @@ class Puzzle:
                 new_board, new_empty = self._gen_output(self.board, self.empty_slot, deltas)
                 self.board = new_board
                 self.empty_slot = new_empty
-                self.print()
+                if not self.output_file:
+                    self.print()
                 if self._check_if_goal():
-                    print("Congratulations! You solved the puzzle!")
+                    if not watch:
+                        print("Congratulations! You solved the puzzle!")
                     sys.exit(0)            
     
     def solve(self):
