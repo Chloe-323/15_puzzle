@@ -31,7 +31,6 @@ class Puzzle:
         self.board = [] #The 2D array that stores the current state
         self.empty_slot = None #The location of the empty slot within the current board
         self.goal_board = [] #The state that we are trying to reach
-        self.goal_empty_slot = None #The empty slot within the state we are trying to reach
         self.output_file = output_file #The output file to write to; can be None for interactive mode
         self.keypresses = keypresses #The keypresses deque
         self.weight = 1.0
